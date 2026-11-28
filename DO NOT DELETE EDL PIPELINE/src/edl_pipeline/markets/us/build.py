@@ -31,7 +31,7 @@ from edl_pipeline.breadth.pipeline import generate_market_breadth
 from edl_pipeline.scanner.indicators import indicator_series
 from edl_pipeline.transforms.market_breadth import generate_analytics
 from ohlcv_utils import symbol_csv_path
-from pipeline_utils import resource_path
+from pipeline_utils import atomic_replace_bytes, resource_path
 
 from .. import UNITED_STATES
 from . import calendar, dhan, earnings, fields, filings, finviz, history, news, statements, tradingview, yahoo
@@ -63,13 +63,14 @@ class SnapshotNotReady(RuntimeError):
 
 def _write_json(path: Path, payload, compress: bool = False):
     data = json.dumps(payload, separators=(',', ':'), allow_nan=False, default=str).encode()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    (path.with_name(path.name + '.gz') if compress else path).write_bytes(gzip.compress(data, mtime=0) if compress else data)
+    if compress:
+        path, data = path.with_name(path.name + '.gz'), gzip.compress(data, mtime=0)
+    atomic_replace_bytes(Path(path).absolute(), data)
 
 
 def _compress(path: Path):
     """India's shared readers take the .json.gz artifacts."""
-    path.with_name(path.name + '.gz').write_bytes(gzip.compress(path.read_bytes(), mtime=0))
+    atomic_replace_bytes(path.with_name(path.name + '.gz').absolute(), gzip.compress(path.read_bytes(), mtime=0))
 
 
 def snapshot_session(rows: list[dict], now: datetime) -> str:

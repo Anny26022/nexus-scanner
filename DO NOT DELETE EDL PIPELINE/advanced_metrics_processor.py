@@ -4,7 +4,13 @@ import glob
 import sys
 import math
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
+SRC_DIR = Path(__file__).resolve().parent / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from edl_pipeline.scanner.indicators import atr, ema, prior_extremes
 from ohlcv_utils import is_nse_session_day
 from pipeline_utils import BASE_DIR, apply_sma_fields, load_json, save_json
 
@@ -32,10 +38,6 @@ SCANNER_DERIVED_FIELDS = [
 # for historical calculations, but must never replace the live scanner quote
 # or its vendor-calculated moving averages.
 LIVE_SCANNER_FIELDS = {'rupee_volume', 'sma10', 'sma20', 'sma50', 'sma200'}
-
-def calculate_ema(series, periods):
-    return series.ewm(span=periods, adjust=False).mean()
-
 
 def value_or_none(value, digits=2):
     if value is None or not math.isfinite(float(value)):
@@ -109,15 +111,18 @@ def process_symbol_csv(csv_path, is_session_day=is_nse_session_day):
         price_6m_ago = df['Close'].iloc[-127] if len(df) >= 127 else None
         returns_6m = ((latest['Close'] - price_6m_ago) / price_6m_ago) * 100 if price_6m_ago is not None and price_6m_ago > 0 else None
         
-        # 52W Low (~252 trading days)
-        low_52w = df['Low'].tail(252).min()
-        pct_from_52w_low = ((latest['Close'] - low_52w) / low_52w) * 100 if len(df) >= 252 and low_52w > 0 else None
+        # 52W high/low: the 252 sessions before the latest bar (prior_extremes, as market breadth).
+        prior_high, prior_low, _, _ = prior_extremes(df, 252)
+        has_52w = len(df) >= 253
+        prior_52w_high = prior_high.iloc[-1] if has_52w else None
+        low_52w = prior_low.iloc[-1]
+        pct_from_52w_low = ((latest['Close'] - low_52w) / low_52w) * 100 if has_52w and low_52w > 0 else None
 
         # 5. Volume Metrics
         df['Turnover_Cr'] = (df['Close'] * df['Volume']) / 10000000 
         avg_rupee_vol_30 = df['Turnover_Cr'].tail(30).mean()
         
-        df['EMA_Vol_200'] = calculate_ema(df['Volume'], 200)
+        df['EMA_Vol_200'] = ema(df['Volume'], 200)
         ema_vol_200_latest = df['EMA_Vol_200'].iloc[-1]
         
         # % from 52W High of 200D EMA Volume
@@ -151,12 +156,7 @@ def process_symbol_csv(csv_path, is_session_day=is_nse_session_day):
             for period, series in sma_series.items()
         }
 
-        true_range = pd.concat([
-            df['High'] - df['Low'],
-            (df['High'] - df['Close'].shift(1)).abs(),
-            (df['Low'] - df['Close'].shift(1)).abs(),
-        ], axis=1).max(axis=1)
-        atr14 = true_range.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean().iloc[-1] if len(df) >= 14 else None
+        atr14 = atr(df, 14).iloc[-1] if len(df) >= 14 else None
         adr20 = (df['High'] - df['Low']).tail(20).mean() if len(df) >= 20 else None
         adr_percent_20 = df['Daily_Range_Pct'].tail(20).mean() if len(df) >= 20 else None
         avg_volume_20 = prior_20['Volume'].mean() if len(prior_20) == 20 else None
@@ -164,7 +164,6 @@ def process_symbol_csv(csv_path, is_session_day=is_nse_session_day):
 
         prior_20_high = df['High'].iloc[-21:-1].max() if len(df) >= 21 else None
         prior_50_high = df['High'].iloc[-51:-1].max() if len(df) >= 51 else None
-        prior_52w_high = df['High'].iloc[-253:-1].max() if len(df) >= 253 else None
         current_range = high - low
         prior_six_ranges = (df['High'] - df['Low']).iloc[-7:-1] if len(df) >= 7 else pd.Series(dtype=float)
 

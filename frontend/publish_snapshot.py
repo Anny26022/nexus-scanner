@@ -28,7 +28,7 @@ from screen_trend_conditions import _delivery_records
 from snapshot_technicals import technical_metrics, CONFIG_PATH
 from theme_classification import (classify, consolidated_classification, SOURCE_PATH as THEME_SOURCE_PATH,
                                   WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
-from pipeline_utils import resource_path
+from pipeline_utils import atomic_replace_bytes, resource_path
 from public_payload import public, public_ipos
 from market_overview import benchmark_series, index_closes, market_overview
 import rotation_history
@@ -82,12 +82,13 @@ def rotation_history_object(root, cache, rows, taxonomy, source_bytes, session, 
     return digest
 
 
+def write_bytes(path, data):
+    atomic_replace_bytes(Path(path).absolute(), data)
+
+
 def write_json(path, payload):
     data=json.dumps(payload, separators=(',', ':'), allow_nan=False).encode()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary=path.with_name(path.name+'.tmp')
-    temporary.write_bytes(data)
-    temporary.replace(path)
+    write_bytes(path, data)
     return data
 
 
@@ -388,14 +389,13 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
             continue  # ETF screening is latest-only; no historical backend input copy.
         destination=backend/name
         if not destination.exists():
-            destination.parent.mkdir(parents=True,exist_ok=True)
-            destination.write_bytes(data)
+            write_bytes(destination, data)
     (backend/'ohlcv_data').mkdir(exist_ok=True)
     history_revision=None
     if packed.exists():
         (backend/'.scanner_cache').mkdir(exist_ok=True)
         if not (backend/'.scanner_cache/history.npz').exists():
-            (backend/'.scanner_cache/history.npz').write_bytes(packed.read_bytes())
+            write_bytes(backend/'.scanner_cache/history.npz', packed.read_bytes())
         with np.load(backend/'.scanner_cache/history.npz',allow_pickle=False) as data:
             history_revision=str(data['revision'])
     if not (backend/'scanner_revision.json').exists():
@@ -405,65 +405,49 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     payload['extendedMetricsVersion'] = 1
     payload['presetRuleMatchesVersion'] = 1
     taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
-    (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
+    write_bytes(generation/'theme-classification.json.gz', gzip.compress(taxonomy_bytes, mtime=0))
     write_json(generation/'universe-classification.json', consolidated_classification(rows, taxonomy))
     stock_bytes=write_json(generation/'stocks.json',payload)
     if etf_bytes is not None:
-        (generation/'etfs.json.gz').write_bytes(gzip.compress(etf_bytes, mtime=0))
+        write_bytes(generation/'etfs.json.gz', gzip.compress(etf_bytes, mtime=0))
     chart_fields = ('symbol', 'name', 'close', 'changePct', 'marketCapCrore', 'freeFloatPct', 'circuitLimit', 'series', 'sector', 'industry', 'nicheTags', 'isFno', 'surveillanceAvailable', 'surveillanceAsOfDate', 'isAsm', 'asmStage', 'isGsm', 'gsmStage', 'listingDate')
     directory = dict(revision=revision, asOfDate=session, stocks=[
         {key: row[key] for key in chart_fields if key in row} for row in rows])
-    (generation/'chart-directory.json.gz').write_bytes(gzip.compress(
+    write_bytes(generation/'chart-directory.json.gz', gzip.compress(
         json.dumps(directory, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
     # Keep the full financial series out of every lightweight scanner row.
     histories = {symbol: public(stock["financial_statement_history"]) for symbol, stock in context['stocks'].items()
                  if stock.get("financial_statement_history")}
-    history_path = generation/'financial-history.json.gz'
-    history_temporary = history_path.with_name(history_path.name+'.tmp')
-    history_temporary.write_bytes(gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
-    history_temporary.replace(history_path)
+    write_bytes(generation/'financial-history.json.gz',
+                gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
     history_dir = generation/'financial-history'
     history_dir.mkdir(exist_ok=True)
     for symbol in context['stocks']:
         if not re.fullmatch(r'[A-Z0-9&_.-]+', symbol):
             raise ValueError('Invalid financial history symbol')
-        target = history_dir/f'{symbol}.json.gz'
-        temporary = target.with_suffix('.tmp')
-        temporary.write_bytes(gzip.compress(json.dumps(histories.get(symbol), separators=(',', ':'), allow_nan=False).encode(), mtime=0))
-        temporary.replace(target)
-    compressed=gzip.compress(stock_bytes,compresslevel=6,mtime=0)
-    compressed_path=generation/'stocks.json.gz'
-    temporary=compressed_path.with_name(compressed_path.name+'.tmp')
-    temporary.write_bytes(compressed); temporary.replace(compressed_path)
+        write_bytes(history_dir/f'{symbol}.json.gz',
+                    gzip.compress(json.dumps(histories.get(symbol), separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+    write_bytes(generation/'stocks.json.gz', gzip.compress(stock_bytes,compresslevel=6,mtime=0))
     packed_bytes = json.dumps(pack_snapshot(payload), separators=(',', ':'), allow_nan=False).encode()
-    packed_path = generation/'stocks.packed.json.gz'
-    temporary = packed_path.with_name(packed_path.name+'.tmp')
-    temporary.write_bytes(gzip.compress(packed_bytes, compresslevel=9, mtime=0))
-    temporary.replace(packed_path)
+    write_bytes(generation/'stocks.packed.json.gz', gzip.compress(packed_bytes, compresslevel=9, mtime=0))
     with gzip.open(root/'ipo_screener.json.gz','rt') as handle:
         ipos=json.load(handle)
     ipo_payload=public_ipos(ipos if isinstance(ipos,dict) else {'records':ipos})
     ipo_bytes=json.dumps(ipo_payload,separators=(',', ':'),allow_nan=False).encode()
-    (generation/'ipos.json.gz').write_bytes(gzip.compress(ipo_bytes,compresslevel=9,mtime=0))
+    write_bytes(generation/'ipos.json.gz', gzip.compress(ipo_bytes,compresslevel=9,mtime=0))
     calendar_bytes=source_bytes.get('earnings_calendar.json.gz')
     if calendar_bytes is not None:
-        calendar_path=generation/'earnings-calendar.json.gz'
-        temporary=calendar_path.with_name(calendar_path.name+'.tmp')
         calendar=public(json.loads(gzip.decompress(calendar_bytes)))
-        temporary.write_bytes(gzip.compress(json.dumps(calendar, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
-        temporary.replace(calendar_path)
+        write_bytes(generation/'earnings-calendar.json.gz',
+                    gzip.compress(json.dumps(calendar, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
     benchmark=benchmark_series(root, source_bytes, session)
     if benchmark is not None:
-        benchmark_path=generation/'benchmark.json.gz'
-        temporary=benchmark_path.with_name(benchmark_path.name+'.tmp')
-        temporary.write_bytes(gzip.compress(json.dumps(benchmark, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
-        temporary.replace(benchmark_path)
+        write_bytes(generation/'benchmark.json.gz',
+                    gzip.compress(json.dumps(benchmark, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
     market=market_overview(source_bytes, session)
     if market is not None:
-        market_path=generation/'market-overview.json.gz'
-        temporary=market_path.with_name(market_path.name+'.tmp')
-        temporary.write_bytes(gzip.compress(json.dumps(market, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
-        temporary.replace(market_path)
+        write_bytes(generation/'market-overview.json.gz',
+                    gzip.compress(json.dumps(market, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
     manifest={'revision':revision,'sessionDate':session,'publishedAt':f'{session}T00:00:00Z','schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz'}
     if calendar_bytes is not None:
         manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
@@ -474,10 +458,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     # Dated band history: fold today's bands into the persistent ledger (rebuilt once with price_band_history.py).
     band_ledger = price_band_history.apply_session(price_band_history.load_ledger(output/price_band_history.LEDGER_NAME), session, rows)
     band_bytes = price_band_history.write_ledger(output/price_band_history.LEDGER_NAME, band_ledger)
-    band_path = generation/'price-band-history.json.gz'
-    band_temporary = band_path.with_name(band_path.name+'.tmp')
-    band_temporary.write_bytes(gzip.compress(band_bytes, compresslevel=9, mtime=0))
-    band_temporary.replace(band_path)
+    write_bytes(generation/'price-band-history.json.gz', gzip.compress(band_bytes, compresslevel=9, mtime=0))
     manifest['priceBandHistoryUrl'] = f'/data/revisions/{revision}/price-band-history.json.gz'
     manifest['chartDirectoryUrl'] = f'/data/revisions/{revision}/chart-directory.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'

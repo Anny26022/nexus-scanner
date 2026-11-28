@@ -17,7 +17,7 @@ import pandas as pd
 
 from .patterns import PATTERN_CONDITION_REGISTRY, evaluate_pattern
 from .context import CONTEXT_CONDITION_REGISTRY, evaluate_context_condition, normalize_condition_spec
-from .indicators import OSCILLATORS, indicator_series, supertrend
+from .indicators import OSCILLATORS, directional_series, indicator_series, supertrend
 from .calculation_cache import memoized
 
 
@@ -185,19 +185,7 @@ def _adx(frame, period):
     period = int(period)
     if period <= 0:
         raise ValueError("ADX period must be positive.")
-    high, low, close = frame["High"], frame["Low"], frame["Close"]
-    previous_close = close.shift(1)
-    true_range = pd.concat((high - low, (high - previous_close).abs(), (low - previous_close).abs()), axis=1).max(axis=1)
-    upward = high.diff()
-    downward = -low.diff()
-    plus_dm = upward.where((upward > downward) & (upward > 0), 0.0)
-    minus_dm = downward.where((downward > upward) & (downward > 0), 0.0)
-    atr = true_range.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
-    plus_di = 100 * plus_dm.ewm(alpha=1 / period, adjust=False, min_periods=period).mean() / atr
-    minus_di = 100 * minus_dm.ewm(alpha=1 / period, adjust=False, min_periods=period).mean() / atr
-    denominator = (plus_di + minus_di).replace(0, np.nan)
-    dx = 100 * (plus_di - minus_di).abs() / denominator
-    return dx.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    return directional_series(frame, period)[3]
 
 
 def _event_result(condition, flags, fired_within, values=None, **details):

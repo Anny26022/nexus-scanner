@@ -43,16 +43,53 @@ def wilder_average(values: pd.Series, period: int) -> pd.Series:
     return values.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
 
 
+def sma(values: pd.Series, period: int) -> pd.Series:
+    period = _positive_period(period)
+    return values.rolling(period, min_periods=period).mean()
+
+
+def ema(values: pd.Series, period: int) -> pd.Series:
+    period = _positive_period(period)
+    return values.ewm(span=period, adjust=False, min_periods=period).mean()
+
+
+def rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    """Wilder RSI: 100 when there are no losses, 50 when the price has not moved at all."""
+    delta = close.diff()
+    average_gain = wilder_average(delta.clip(lower=0), period)
+    average_loss = wilder_average(-delta.clip(upper=0), period)
+    result = 100 - 100 / (1 + average_gain / average_loss.replace(0, np.nan))
+    result = result.where(average_loss != 0, 100.0)
+    return result.where(~((average_gain == 0) & (average_loss == 0)), 50.0)
+
+
+def atr(frame: pd.DataFrame, period: int = 14) -> pd.Series:
+    return wilder_average(true_range(frame), period)
+
+
+def prior_extremes(frame: pd.DataFrame, sessions: int) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    """The one rule for a new N-session (e.g. 52-week) high or low.
+
+    Each bar is compared with the ``sessions`` bars before it, never with itself: a new high is a high strictly
+    above the prior window's highest high, a new low a low strictly below its lowest low. Returns
+    ``(prior_high, prior_low, new_high, new_low)``; the flags are False until a full prior window exists.
+    """
+    sessions = _positive_period(sessions)
+    prior_high = frame["High"].shift(1).rolling(sessions, min_periods=sessions).max()
+    prior_low = frame["Low"].shift(1).rolling(sessions, min_periods=sessions).min()
+    return prior_high, prior_low, frame["High"] > prior_high, frame["Low"] < prior_low
+
+
 def directional_series(frame: pd.DataFrame, period: int) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
     period = _positive_period(period)
     upward, downward = frame["High"].diff(), -frame["Low"].diff()
     plus_dm = upward.where((upward > downward) & (upward > 0), 0.0)
     minus_dm = downward.where((downward > upward) & (downward > 0), 0.0)
-    atr = wilder_average(true_range(frame), period)
-    plus_di = 100 * wilder_average(plus_dm, period) / atr.replace(0, np.nan)
-    minus_di = 100 * wilder_average(minus_dm, period) / atr.replace(0, np.nan)
+    average_range = atr(frame, period)
+    plus_di = 100 * wilder_average(plus_dm, period) / average_range.replace(0, np.nan)
+    minus_di = 100 * wilder_average(minus_dm, period) / average_range.replace(0, np.nan)
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    return atr, plus_di, minus_di, wilder_average(dx, period)
+    return average_range, plus_di, minus_di, wilder_average(dx, period)
 
 
 def supertrend(frame: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> tuple[pd.Series, pd.Series]:
@@ -65,16 +102,16 @@ def supertrend(frame: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -
     multiplier = float(multiplier)
     if multiplier <= 0:
         raise ValueError("Supertrend multiplier must be positive.")
-    atr = wilder_average(true_range(frame), period)
+    average_range = atr(frame, period)
     midpoint = (frame["High"] + frame["Low"]) / 2
-    basic_upper, basic_lower = midpoint + multiplier * atr, midpoint - multiplier * atr
+    basic_upper, basic_lower = midpoint + multiplier * average_range, midpoint - multiplier * average_range
     closes = frame["Close"].to_numpy(dtype=float)
     middle_values = midpoint.to_numpy(dtype=float)
     basic_upper_values = basic_upper.to_numpy(dtype=float)
     basic_lower_values = basic_lower.to_numpy(dtype=float)
     upper = np.full(len(frame), np.nan); lower = np.full(len(frame), np.nan)
     line = np.full(len(frame), np.nan); direction = np.full(len(frame), np.nan)
-    valid = np.flatnonzero(atr.notna().to_numpy())
+    valid = np.flatnonzero(average_range.notna().to_numpy())
     if not len(valid):
         return pd.Series(line, index=frame.index), pd.Series(direction, index=frame.index)
     start = int(valid[0])
@@ -110,21 +147,13 @@ def indicator_series(frame: pd.DataFrame, name: str, period: int = 14, multiplie
     if name == "HL2": return (high + low) / 2
     if name == "HLC3": return (high + low + close) / 3
     if name == "OHLC4": return (frame["Open"] + high + low + close) / 4
-    if name == "SMA": return close.rolling(period, min_periods=period).mean()
-    if name == "EMA": return close.ewm(span=period, adjust=False, min_periods=period).mean()
+    if name == "SMA": return sma(close, period)
+    if name == "EMA": return ema(close, period)
     if name == "WMA":
         weights = np.arange(1, period + 1, dtype=float)
         return close.rolling(period, min_periods=period).apply(lambda values: float(np.dot(values, weights) / weights.sum()), raw=True)
     if name == "VOLUME_SMA": return volume.rolling(period, min_periods=period).mean()
-    if name == "RSI":
-        delta = close.diff()
-        gains, losses = delta.clip(lower=0), -delta.clip(upper=0)
-        average_gain = wilder_average(gains, period)
-        average_loss = wilder_average(losses, period)
-        relative = average_gain / average_loss.replace(0, np.nan)
-        result = 100 - 100 / (1 + relative)
-        result = result.where(average_loss != 0, 100.0)
-        return result.where(~((average_gain == 0) & (average_loss == 0)), 50.0)
+    if name == "RSI": return rsi(close, period)
     if name in {"MACD", "MACD_SIGNAL", "MACD_HIST"}:
         # ``period`` is the slow span.  Scale the conventional 12/26/9
         # relationship so the generic indicator builder's period control is
@@ -162,8 +191,8 @@ def indicator_series(frame: pd.DataFrame, name: str, period: int = 14, multiplie
         signed = np.sign(close.diff()).fillna(0) * volume
         return signed.cumsum()
     if name in {"ADX", "PLUS_DI", "MINUS_DI", "ATR"}:
-        atr, plus_di, minus_di, adx = directional_series(frame, period)
-        return {"ATR": atr, "PLUS_DI": plus_di, "MINUS_DI": minus_di, "ADX": adx}[name]
+        average_range, plus_di, minus_di, adx = directional_series(frame, period)
+        return {"ATR": average_range, "PLUS_DI": plus_di, "MINUS_DI": minus_di, "ADX": adx}[name]
     if name in {"SUPERTREND", "SUPERTREND_DIRECTION"}:
         line, direction = supertrend(frame, period, multiplier)
         return line if name == "SUPERTREND" else direction

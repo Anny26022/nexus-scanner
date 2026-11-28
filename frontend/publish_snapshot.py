@@ -217,8 +217,10 @@ def _stock_row(task, context, session, presets, default, memo_keys):
             row[field] = metrics.get(field, row.get(field))
         row['daysSinceEarnings'] = metrics.get('DAYS_SINCE_EARNINGS')
         # The Earnings scans' inputs: quarterly growth streaks, the results-day reaction and the next results date.
-        row['earnings'] = earnings_signals(stock, frame if aligned else None, session, (context.get('next_results') or {}).get(symbol),
-                                           (context.get('pulse_dates') or {}).get(symbol))
+        earnings = earnings_signals(stock, frame if aligned else None, session, (context.get('next_results') or {}).get(symbol),
+                                    (context.get('pulse_dates') or {}).get(symbol))
+        if earnings is not None:
+            row['earnings'] = earnings
         row['presetRuleMatches']={key:evaluate(node['expression']) for key,node in presets.items()}
         row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
         default_match = evaluate(default) is True

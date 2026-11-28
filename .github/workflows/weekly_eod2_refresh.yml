@@ -114,7 +114,9 @@ jobs:
 
       - name: Refresh optional Earnings Pulse history
         continue-on-error: true
-        timeout-minutes: 25
+        # Usually ~10 s; capped so a slow provider cannot hold up the release (the index is replaced atomically,
+        # so a stopped run leaves the previous one for the build).
+        timeout-minutes: 3
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

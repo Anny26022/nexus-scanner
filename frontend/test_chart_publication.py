@@ -179,6 +179,10 @@ class PublicationTests(unittest.TestCase):
                 path = Path(tmp)/'nested'/'data.json'
                 write_json(path, {'a': [1, 2], 'b': 'x'})
                 self.assertEqual(path.read_bytes(), b'{"a":[1,2],"b":"x"}')
+                # A payload JSON cannot hold (NaN) still raises, before anything is written.
+                with self.assertRaises(ValueError):
+                    write_json(path, {'a': float('nan')})
+                self.assertEqual(path.read_bytes(), b'{"a":[1,2],"b":"x"}')
                 # A write that fails at the rename leaves the previous file and no temporary behind.
                 with patch('pathlib.Path.replace', side_effect=OSError('disk full')), self.assertRaises(OSError):
                     write_json(path, {'a': 3})

@@ -85,11 +85,11 @@ def directional_series(frame: pd.DataFrame, period: int) -> tuple[pd.Series, pd.
     upward, downward = frame["High"].diff(), -frame["Low"].diff()
     plus_dm = upward.where((upward > downward) & (upward > 0), 0.0)
     minus_dm = downward.where((downward > upward) & (downward > 0), 0.0)
-    atr = wilder_average(true_range(frame), period)
-    plus_di = 100 * wilder_average(plus_dm, period) / atr.replace(0, np.nan)
-    minus_di = 100 * wilder_average(minus_dm, period) / atr.replace(0, np.nan)
+    average_range = atr(frame, period)
+    plus_di = 100 * wilder_average(plus_dm, period) / average_range.replace(0, np.nan)
+    minus_di = 100 * wilder_average(minus_dm, period) / average_range.replace(0, np.nan)
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    return atr, plus_di, minus_di, wilder_average(dx, period)
+    return average_range, plus_di, minus_di, wilder_average(dx, period)
 
 
 def supertrend(frame: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> tuple[pd.Series, pd.Series]:
@@ -102,16 +102,16 @@ def supertrend(frame: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -
     multiplier = float(multiplier)
     if multiplier <= 0:
         raise ValueError("Supertrend multiplier must be positive.")
-    atr = wilder_average(true_range(frame), period)
+    average_range = atr(frame, period)
     midpoint = (frame["High"] + frame["Low"]) / 2
-    basic_upper, basic_lower = midpoint + multiplier * atr, midpoint - multiplier * atr
+    basic_upper, basic_lower = midpoint + multiplier * average_range, midpoint - multiplier * average_range
     closes = frame["Close"].to_numpy(dtype=float)
     middle_values = midpoint.to_numpy(dtype=float)
     basic_upper_values = basic_upper.to_numpy(dtype=float)
     basic_lower_values = basic_lower.to_numpy(dtype=float)
     upper = np.full(len(frame), np.nan); lower = np.full(len(frame), np.nan)
     line = np.full(len(frame), np.nan); direction = np.full(len(frame), np.nan)
-    valid = np.flatnonzero(atr.notna().to_numpy())
+    valid = np.flatnonzero(average_range.notna().to_numpy())
     if not len(valid):
         return pd.Series(line, index=frame.index), pd.Series(direction, index=frame.index)
     start = int(valid[0])
@@ -191,8 +191,8 @@ def indicator_series(frame: pd.DataFrame, name: str, period: int = 14, multiplie
         signed = np.sign(close.diff()).fillna(0) * volume
         return signed.cumsum()
     if name in {"ADX", "PLUS_DI", "MINUS_DI", "ATR"}:
-        atr, plus_di, minus_di, adx = directional_series(frame, period)
-        return {"ATR": atr, "PLUS_DI": plus_di, "MINUS_DI": minus_di, "ADX": adx}[name]
+        average_range, plus_di, minus_di, adx = directional_series(frame, period)
+        return {"ATR": average_range, "PLUS_DI": plus_di, "MINUS_DI": minus_di, "ADX": adx}[name]
     if name in {"SUPERTREND", "SUPERTREND_DIRECTION"}:
         line, direction = supertrend(frame, period, multiplier)
         return line if name == "SUPERTREND" else direction
